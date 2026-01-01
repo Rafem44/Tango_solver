@@ -238,6 +238,52 @@ def create_example_grid_3() -> TangoGrid:
     return grid
 
 
+def create_grid_from_image() -> TangoGrid:
+    """
+    Create a 6x6 puzzle from the provided image
+    Diamonds (◆) = 0, Circles (●) = 1, Empty = None
+    """
+    grid = TangoGrid(6, 6)
+
+    # Row 0: ◆ ◆ _ ● ◆ _
+    grid.set_cell(0, 0, 0)
+    grid.set_cell(0, 1, 0)
+    grid.set_cell(0, 3, 1)
+    grid.set_cell(0, 4, 0)
+
+    # Row 1: ◆ ◆ _ _ _ ●
+    grid.set_cell(1, 0, 0)
+    grid.set_cell(1, 1, 0)
+    grid.set_cell(1, 5, 1)
+
+    # Row 2: ● _ _ _ ● ◆
+    grid.set_cell(2, 0, 1)
+    grid.set_cell(2, 4, 1)
+    grid.set_cell(2, 5, 0)
+
+    # Row 3: ● ● ◆ ◆ ● ◆
+    grid.set_cell(3, 0, 1)
+    grid.set_cell(3, 1, 1)
+    grid.set_cell(3, 2, 0)
+    grid.set_cell(3, 3, 0)
+    grid.set_cell(3, 4, 1)
+    grid.set_cell(3, 5, 0)
+
+    # Row 4: ◆ ◆ ● _ ◆ ●
+    grid.set_cell(4, 0, 0)
+    grid.set_cell(4, 1, 0)
+    grid.set_cell(4, 2, 1)
+    grid.set_cell(4, 4, 0)
+    grid.set_cell(4, 5, 1)
+
+    # Row 5: _ ● ◆ _ _ ◆
+    grid.set_cell(5, 1, 1)
+    grid.set_cell(5, 2, 0)
+    grid.set_cell(5, 5, 0)
+
+    return grid
+
+
 def main():
     """Main execution"""
     print("=== Tango Puzzle Solver ===\n")
@@ -285,6 +331,28 @@ def main():
     print("After applying constraints:")
     print(grid3)
     print(f"Solved: {solved3}\n")
+
+    # Example 4: Puzzle from user's image
+    print("=" * 40)
+    print("\nExample 4: Puzzle from image (◆=0, ●=1)")
+    print("Initial grid:")
+    grid4 = create_grid_from_image()
+    print(grid4)
+    print()
+
+    solver4 = TangoSolver(grid4)
+    solved4 = solver4.solve()
+
+    print("After applying constraints:")
+    print(grid4)
+    print(f"Solved: {solved4}\n")
+
+    # Display with symbols for better visualization
+    if solved4:
+        print("Solution with symbols:")
+        for row in grid4.grid:
+            row_str = ' '.join(['◆' if cell == 0 else '●' for cell in row])
+            print(row_str)
 
 
 if __name__ == "__main__":
