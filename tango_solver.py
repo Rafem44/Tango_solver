@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+Tango Puzzle Solver
+
+Based on the algorithm:
+- Grid filled with 0s and 1s
+- Each cell has 3 states: empty (None), 0, or 1
+- Process line by line, then column by column
+- Apply constraint rules:
+  1. If n-1 = n+1, then n ≠ n+1 (if two neighbors are equal, middle is different)
+  2. If n = n+1, then n-1 = n+2 ≠ n (if two consecutive equal, previous equals two positions after)
+"""
+
+from typing import List, Optional, Tuple
+import copy
+
+
+class TangoGrid:
+    """Represents a Tango puzzle grid"""
+
+    def __init__(self, rows: int, cols: int):
+        self.rows = rows
+        self.cols = cols
+        # Grid: None = empty, 0 or 1 = filled
+        self.grid: List[List[Optional[int]]] = [[None for _ in range(cols)] for _ in range(rows)]
+
+    def set_cell(self, row: int, col: int, value: Optional[int]):
+        """Set a cell value (None, 0, or 1)"""
+        if value is not None and value not in [0, 1]:
+            raise ValueError(f"Cell value must be None, 0, or 1, got {value}")
+        self.grid[row][col] = value
+
+    def get_cell(self, row: int, col: int) -> Optional[int]:
+        """Get a cell value"""
+        return self.grid[row][col]
+
+    def is_complete(self) -> bool:
+        """Check if all cells are filled"""
+        for row in range(self.rows):
+            for col in range(self.cols):
+                if self.grid[row][col] is None:
+                    return False
+        return True
+
+    def __str__(self) -> str:
+        """String representation of the grid"""
+        result = []
+        for row in self.grid:
+            row_str = ' '.join(['.' if cell is None else str(cell) for cell in row])
+            result.append(row_str)
+        return '\n'.join(result)
+
+    def copy(self) -> 'TangoGrid':
+        """Create a deep copy of the grid"""
+        new_grid = TangoGrid(self.rows, self.cols)
+        new_grid.grid = copy.deepcopy(self.grid)
+        return new_grid
+
+
+class TangoSolver:
+    """Solves Tango puzzles using constraint propagation"""
+
+    def __init__(self, grid: TangoGrid):
+        self.grid = grid
+        self.changes_made = False
+
+    def solve(self, max_iterations: int = 100) -> bool:
+        """
+        Solve the puzzle using iterative constraint propagation
+        Returns True if solved, False otherwise
+        """
+        iteration = 0
+        while not self.grid.is_complete() and iteration < max_iterations:
+            self.changes_made = False
+
+            # Process rows (line by line)
+            for row in range(self.grid.rows):
+                self._process_line(row, is_row=True)
+
+            # Process columns (column by column)
+            for col in range(self.grid.cols):
+                self._process_line(col, is_row=False)
+
+            # If no changes were made, we're stuck
+            if not self.changes_made:
+                break
+
+            iteration += 1
+
+        return self.grid.is_complete()
+
+    def _get_line(self, index: int, is_row: bool) -> List[Optional[int]]:
+        """Get a row or column as a list"""
+        if is_row:
+            return self.grid.grid[index]
+        else:
+            return [self.grid.grid[row][index] for row in range(self.grid.rows)]
+
+    def _set_cell_safe(self, row: int, col: int, value: int):
+        """Set a cell value if it's currently empty"""
+        if self.grid.get_cell(row, col) is None:
+            self.grid.set_cell(row, col, value)
+            self.changes_made = True
+
+    def _process_line(self, index: int, is_row: bool):
+        """Process a single row or column applying constraint rules"""
+        line = self._get_line(index, is_row)
+        length = len(line)
+
+        # Apply constraint rules
+        for i in range(length):
+            # Rule 1: If n-1 = n+1, then n ≠ n+1
+            # This means if two neighbors are equal, the middle must be different
+            if i > 0 and i < length - 1:
+                prev = line[i-1]
+                next_val = line[i+1]
+                current = line[i]
+
+                if prev is not None and next_val is not None and prev == next_val:
+                    # Middle must be different from neighbors
+                    if current is None:
+                        opposite = 1 - prev
+                        self._set_cell_in_line(index, i, opposite, is_row)
+
+            # Rule 2: If n = n+1, then n-1 = n+2 ≠ n
+            # If two consecutive cells are equal, the one before equals the one two positions after
+            if i < length - 1:
+                current = line[i]
+                next_val = line[i+1]
+
+                if current is not None and next_val is not None and current == next_val:
+                    # n-1 should equal n+2 and both should be different from n
+                    opposite = 1 - current
+
+                    # Set n-1 if empty
+                    if i > 0 and line[i-1] is None:
+                        self._set_cell_in_line(index, i-1, opposite, is_row)
+
+                    # Set n+2 if empty
+                    if i + 2 < length and line[i+2] is None:
+                        self._set_cell_in_line(index, i+2, opposite, is_row)
+
+            # Additional rule: No three consecutive same values
+            if i < length - 2:
+                vals = [line[i], line[i+1], line[i+2]]
+
+                # If two are known and equal, the third must be different
+                if vals[0] is not None and vals[1] is not None and vals[0] == vals[1] and vals[2] is None:
+                    opposite = 1 - vals[0]
+                    self._set_cell_in_line(index, i+2, opposite, is_row)
+
+                if vals[1] is not None and vals[2] is not None and vals[1] == vals[2] and vals[0] is None:
+                    opposite = 1 - vals[1]
+                    self._set_cell_in_line(index, i, opposite, is_row)
+
+                if vals[0] is not None and vals[2] is not None and vals[0] == vals[2] and vals[1] is None:
+                    opposite = 1 - vals[0]
+                    self._set_cell_in_line(index, i+1, opposite, is_row)
+
+    def _set_cell_in_line(self, line_index: int, position: int, value: int, is_row: bool):
+        """Set a cell value in a specific line (row or column)"""
+        if is_row:
+            self._set_cell_safe(line_index, position, value)
+        else:
+            self._set_cell_safe(position, line_index, value)
+
+
+def create_example_grid_1() -> TangoGrid:
+    """Create an example Tango puzzle (5x5)"""
+    grid = TangoGrid(5, 5)
+
+    # Set initial values from the image
+    grid.set_cell(0, 0, 0)
+    grid.set_cell(0, 1, 1)
+    grid.set_cell(0, 2, 0)
+    grid.set_cell(0, 3, 0)
+
+    return grid
+
+
+def create_example_grid_2() -> TangoGrid:
+    """Create a simple test puzzle"""
+    grid = TangoGrid(4, 4)
+
+    # Create a pattern with some known values
+    grid.set_cell(0, 0, 0)
+    grid.set_cell(0, 2, 1)
+    grid.set_cell(1, 1, 0)
+    grid.set_cell(2, 0, 1)
+    grid.set_cell(3, 3, 0)
+
+    return grid
+
+
+def main():
+    """Main execution"""
+    print("=== Tango Puzzle Solver ===\n")
+
+    # Example 1: From the image
+    print("Example 1: Grid from image")
+    print("Initial grid:")
+    grid1 = create_example_grid_1()
+    print(grid1)
+    print()
+
+    solver1 = TangoSolver(grid1)
+    solved1 = solver1.solve()
+
+    print("After applying constraints:")
+    print(grid1)
+    print(f"Solved: {solved1}\n")
+
+    # Example 2: Test puzzle
+    print("=" * 40)
+    print("\nExample 2: Test puzzle")
+    print("Initial grid:")
+    grid2 = create_example_grid_2()
+    print(grid2)
+    print()
+
+    solver2 = TangoSolver(grid2)
+    solved2 = solver2.solve()
+
+    print("After applying constraints:")
+    print(grid2)
+    print(f"Solved: {solved2}\n")
+
+
+if __name__ == "__main__":
+    main()

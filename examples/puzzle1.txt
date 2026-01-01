@@ -1,0 +1,9 @@
+# Example Puzzle 1
+# Format: . = empty, 0 = zero, 1 = one
+# Grid size: 5x5
+
+0 1 0 0 .
+. . . . .
+. . . . .
+. . . . .
+. . . . .

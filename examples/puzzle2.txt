@@ -1,0 +1,8 @@
+# Example Puzzle 2
+# A simple 4x4 puzzle
+# Grid size: 4x4
+
+0 . 1 .
+. 0 . .
+1 . . .
+. . . 0
