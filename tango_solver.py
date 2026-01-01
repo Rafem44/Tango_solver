@@ -14,6 +14,7 @@ Based on the algorithm:
 
 from typing import List, Optional, Tuple
 import copy
+import time
 
 
 class TangoGrid:
@@ -65,12 +66,19 @@ class TangoSolver:
         self.grid = grid
         self.changes_made = False
 
-    def solve(self, max_iterations: int = 100) -> bool:
+    def solve(self, max_iterations: int = 100) -> Tuple[bool, int, float]:
         """
         Solve the puzzle using iterative constraint propagation
-        Returns True if solved, False otherwise
+
+        Returns:
+            Tuple of (is_solved, iterations, elapsed_time_ms)
+            - is_solved: True if puzzle is completely solved
+            - iterations: Number of iterations performed
+            - elapsed_time_ms: Time taken in milliseconds
         """
+        start_time = time.time()
         iteration = 0
+
         while not self.grid.is_complete() and iteration < max_iterations:
             self.changes_made = False
 
@@ -88,7 +96,8 @@ class TangoSolver:
 
             iteration += 1
 
-        return self.grid.is_complete()
+        elapsed_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+        return self.grid.is_complete(), iteration, elapsed_time
 
     def _get_line(self, index: int, is_row: bool) -> List[Optional[int]]:
         """Get a row or column as a list"""
@@ -240,7 +249,7 @@ def create_example_grid_3() -> TangoGrid:
 
 def create_grid_from_image() -> TangoGrid:
     """
-    Create a 6x6 puzzle from the provided image
+    Create a 6x6 puzzle from the provided image (first puzzle)
     Diamonds (◆) = 0, Circles (●) = 1, Empty = None
     """
     grid = TangoGrid(6, 6)
@@ -284,6 +293,41 @@ def create_grid_from_image() -> TangoGrid:
     return grid
 
 
+def create_grid_from_image_2() -> TangoGrid:
+    """
+    Create a 6x6 puzzle from the second provided image
+    Diamonds (◆) = 0, Circles (●) = 1, Empty = None
+    """
+    grid = TangoGrid(6, 6)
+
+    # Row 0: ● _ _ _ ◆ _
+    grid.set_cell(0, 0, 1)
+    grid.set_cell(0, 4, 0)
+
+    # Row 1: _ _ ◆ _ _ _
+    grid.set_cell(1, 2, 0)
+
+    # Row 2: _ _ _ _ _ ◆
+    grid.set_cell(2, 5, 0)
+
+    # Row 3: _ _ _ ◆ ● ◆
+    grid.set_cell(3, 3, 0)
+    grid.set_cell(3, 4, 1)
+    grid.set_cell(3, 5, 0)
+
+    # Row 4: _ _ ◆ ◆ ● ●
+    grid.set_cell(4, 2, 0)
+    grid.set_cell(4, 3, 0)
+    grid.set_cell(4, 4, 1)
+    grid.set_cell(4, 5, 1)
+
+    # Row 5: _ _ _ ● _ ◆
+    grid.set_cell(5, 3, 1)
+    grid.set_cell(5, 5, 0)
+
+    return grid
+
+
 def main():
     """Main execution"""
     print("=== Tango Puzzle Solver ===\n")
@@ -296,11 +340,13 @@ def main():
     print()
 
     solver1 = TangoSolver(grid1)
-    solved1 = solver1.solve()
+    solved1, iterations1, time1 = solver1.solve()
 
     print("After applying constraints:")
     print(grid1)
-    print(f"Solved: {solved1}\n")
+    print(f"Solved: {solved1}")
+    print(f"Iterations: {iterations1}")
+    print(f"Time: {time1:.3f} ms\n")
 
     # Example 2: 4x4 Test puzzle with balance
     print("=" * 40)
@@ -311,11 +357,13 @@ def main():
     print()
 
     solver2 = TangoSolver(grid2)
-    solved2 = solver2.solve()
+    solved2, iterations2, time2 = solver2.solve()
 
     print("After applying constraints:")
     print(grid2)
-    print(f"Solved: {solved2}\n")
+    print(f"Solved: {solved2}")
+    print(f"Iterations: {iterations2}")
+    print(f"Time: {time2:.3f} ms\n")
 
     # Example 3: 6x6 puzzle
     print("=" * 40)
@@ -326,11 +374,13 @@ def main():
     print()
 
     solver3 = TangoSolver(grid3)
-    solved3 = solver3.solve()
+    solved3, iterations3, time3 = solver3.solve()
 
     print("After applying constraints:")
     print(grid3)
-    print(f"Solved: {solved3}\n")
+    print(f"Solved: {solved3}")
+    print(f"Iterations: {iterations3}")
+    print(f"Time: {time3:.3f} ms\n")
 
     # Example 4: Puzzle from user's image
     print("=" * 40)
@@ -341,16 +391,42 @@ def main():
     print()
 
     solver4 = TangoSolver(grid4)
-    solved4 = solver4.solve()
+    solved4, iterations4, time4 = solver4.solve()
 
     print("After applying constraints:")
     print(grid4)
-    print(f"Solved: {solved4}\n")
+    print(f"Solved: {solved4}")
+    print(f"Iterations: {iterations4}")
+    print(f"Time: {time4:.3f} ms\n")
 
     # Display with symbols for better visualization
     if solved4:
         print("Solution with symbols:")
         for row in grid4.grid:
+            row_str = ' '.join(['◆' if cell == 0 else '●' for cell in row])
+            print(row_str)
+
+    # Example 5: Second puzzle from user's image (more challenging)
+    print("\n" + "=" * 40)
+    print("\nExample 5: Second puzzle from image (◆=0, ●=1)")
+    print("Initial grid:")
+    grid5 = create_grid_from_image_2()
+    print(grid5)
+    print()
+
+    solver5 = TangoSolver(grid5)
+    solved5, iterations5, time5 = solver5.solve()
+
+    print("After applying constraints:")
+    print(grid5)
+    print(f"Solved: {solved5}")
+    print(f"Iterations: {iterations5}")
+    print(f"Time: {time5:.3f} ms\n")
+
+    # Display with symbols for better visualization
+    if solved5:
+        print("Solution with symbols:")
+        for row in grid5.grid:
             row_str = ' '.join(['◆' if cell == 0 else '●' for cell in row])
             print(row_str)
 
