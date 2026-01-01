@@ -9,6 +9,7 @@ Based on the algorithm:
 - Apply constraint rules:
   1. If n-1 = n+1, then n ≠ n+1 (if two neighbors are equal, middle is different)
   2. If n = n+1, then n-1 = n+2 ≠ n (if two consecutive equal, previous equals two positions after)
+  3. Equal balance: Each line must have an equal number of 0s and 1s
 """
 
 from typing import List, Optional, Tuple
@@ -107,6 +108,31 @@ class TangoSolver:
         line = self._get_line(index, is_row)
         length = len(line)
 
+        # Rule 0: Balance constraint - equal number of 0s and 1s
+        # Count current 0s and 1s in the line
+        count_zeros = sum(1 for cell in line if cell == 0)
+        count_ones = sum(1 for cell in line if cell == 1)
+        count_empty = sum(1 for cell in line if cell is None)
+
+        # If line length is even, we need equal 0s and 1s
+        if length % 2 == 0:
+            target = length // 2
+
+            # If we have enough zeros, fill remaining with ones
+            if count_zeros == target and count_empty > 0:
+                for i in range(length):
+                    if line[i] is None:
+                        self._set_cell_in_line(index, i, 1, is_row)
+
+            # If we have enough ones, fill remaining with zeros
+            elif count_ones == target and count_empty > 0:
+                for i in range(length):
+                    if line[i] is None:
+                        self._set_cell_in_line(index, i, 0, is_row)
+
+        # Refresh line after balance constraint
+        line = self._get_line(index, is_row)
+
         # Apply constraint rules
         for i in range(length):
             # Rule 1: If n-1 = n+1, then n ≠ n+1
@@ -179,15 +205,35 @@ def create_example_grid_1() -> TangoGrid:
 
 
 def create_example_grid_2() -> TangoGrid:
-    """Create a simple test puzzle"""
+    """Create a simple test puzzle (4x4 with balance constraint)"""
     grid = TangoGrid(4, 4)
 
     # Create a pattern with some known values
+    # Each row and column should have 2 zeros and 2 ones
     grid.set_cell(0, 0, 0)
-    grid.set_cell(0, 2, 1)
-    grid.set_cell(1, 1, 0)
-    grid.set_cell(2, 0, 1)
-    grid.set_cell(3, 3, 0)
+    grid.set_cell(0, 1, 0)  # Row 0 has 2 zeros, so rest must be ones
+    grid.set_cell(1, 0, 1)
+    grid.set_cell(1, 2, 0)
+    grid.set_cell(2, 1, 1)
+    grid.set_cell(3, 2, 1)
+
+    return grid
+
+
+def create_example_grid_3() -> TangoGrid:
+    """Create a 6x6 puzzle with better demonstration of rules"""
+    grid = TangoGrid(6, 6)
+
+    # Each row and column should have 3 zeros and 3 ones
+    grid.set_cell(0, 0, 0)
+    grid.set_cell(0, 1, 1)
+    grid.set_cell(0, 2, 0)
+    grid.set_cell(1, 0, 1)
+    grid.set_cell(1, 3, 1)
+    grid.set_cell(2, 2, 1)
+    grid.set_cell(3, 1, 0)
+    grid.set_cell(4, 4, 0)
+    grid.set_cell(5, 5, 1)
 
     return grid
 
@@ -197,7 +243,7 @@ def main():
     print("=== Tango Puzzle Solver ===\n")
 
     # Example 1: From the image
-    print("Example 1: Grid from image")
+    print("Example 1: Grid from image (5x5)")
     print("Initial grid:")
     grid1 = create_example_grid_1()
     print(grid1)
@@ -210,9 +256,9 @@ def main():
     print(grid1)
     print(f"Solved: {solved1}\n")
 
-    # Example 2: Test puzzle
+    # Example 2: 4x4 Test puzzle with balance
     print("=" * 40)
-    print("\nExample 2: Test puzzle")
+    print("\nExample 2: 4x4 puzzle with balance constraint")
     print("Initial grid:")
     grid2 = create_example_grid_2()
     print(grid2)
@@ -224,6 +270,21 @@ def main():
     print("After applying constraints:")
     print(grid2)
     print(f"Solved: {solved2}\n")
+
+    # Example 3: 6x6 puzzle
+    print("=" * 40)
+    print("\nExample 3: 6x6 puzzle")
+    print("Initial grid:")
+    grid3 = create_example_grid_3()
+    print(grid3)
+    print()
+
+    solver3 = TangoSolver(grid3)
+    solved3 = solver3.solve()
+
+    print("After applying constraints:")
+    print(grid3)
+    print(f"Solved: {solved3}\n")
 
 
 if __name__ == "__main__":

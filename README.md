@@ -18,6 +18,20 @@ Tango is a binary puzzle game where you fill a grid with 0s and 1s following spe
 
 The solver implements the following constraint rules:
 
+#### Rule 0: Balance Constraint
+**Each row and column must have an equal number of 0s and 1s**
+
+For a line of length L (where L is even):
+- Number of 0s = L/2
+- Number of 1s = L/2
+
+```
+Example (4-cell row): [0][0][?][?] → [0][0][1][1]
+Example (6-cell row): [1][1][1][?][?][?] → [1][1][1][0][0][0]
+```
+
+This constraint is most effective with even-sized grids (4x4, 6x6, 8x8, etc.)
+
 #### Rule 1: Sandwich Rule
 **If n-1 = n+1, then n ≠ n+1**
 
@@ -91,7 +105,7 @@ print(f"Solved: {is_solved}")
 ```
 === Tango Puzzle Solver ===
 
-Example 1: Grid from image
+Example 1: Grid from image (5x5)
 Initial grid:
 0 1 0 0 .
 . . . . .
@@ -105,6 +119,21 @@ After applying constraints:
 . . . . .
 . . . . .
 . . . . .
+
+========================================
+
+Example 2: 4x4 puzzle with balance constraint
+Initial grid:
+0 0 . .
+1 . 0 .
+. 1 . .
+. . 1 .
+
+After applying constraints:
+0 0 1 1
+1 . 0 .
+. 1 0 .
+. . 1 .
 ```
 
 ## Class Reference
