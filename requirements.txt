@@ -1,3 +1,12 @@
 # Tango Solver Requirements
-# Python 3.6+ required
-# No external dependencies needed for core functionality
+# Python 3.8+ required
+
+# Core solver: No external dependencies needed
+
+# OCR module (tango_ocr.py):
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Optional: For enhanced OCR capabilities
+# pytesseract>=0.3.10
+# Pillow>=10.0.0
