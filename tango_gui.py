@@ -41,6 +41,9 @@ class TangoGUI:
         # Selected constraint type
         self.constraint_type = tk.StringVar(value="=")
 
+        # Grid size override
+        self.grid_size_override = tk.IntVar(value=0)  # 0 = auto-detect
+
         # Create UI
         self._create_ui()
 
@@ -53,6 +56,19 @@ class TangoGUI:
         # Load image button
         ttk.Button(top_frame, text="📁 Charger Image",
                   command=self.load_image).pack(side=tk.LEFT, padx=5)
+
+        # Grid size selector
+        ttk.Label(top_frame, text="Taille grille:").pack(side=tk.LEFT, padx=10)
+        size_combo = ttk.Combobox(top_frame, textvariable=self.grid_size_override,
+                                 values=[0, 4, 6, 8, 10, 12], width=8, state="readonly")
+        size_combo.pack(side=tk.LEFT, padx=5)
+        size_combo.bind("<<ComboboxSelected>>", self.on_grid_size_changed)
+
+        # Add tooltip
+        ttk.Label(top_frame, text="(0 = auto)", font=("Arial", 8)).pack(side=tk.LEFT)
+
+        # Separator
+        ttk.Separator(top_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
 
         # Constraint type selector
         ttk.Label(top_frame, text="Type de contrainte:").pack(side=tk.LEFT, padx=10)
@@ -93,6 +109,37 @@ class TangoGUI:
                                    relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
+    def on_grid_size_changed(self, event=None):
+        """Handle grid size selection change"""
+        if self.image_path and self.grid_size != (0, 0):
+            # Reload with new size
+            self.load_image()
+
+    def _redetect_symbols_with_size(self, ocr_grid_size, ocr_values, new_grid_size):
+        """
+        Map OCR-detected symbols to new grid size
+
+        This is a simple proportional mapping - may not be perfect
+        but gives the user a starting point
+        """
+        old_rows, old_cols = ocr_grid_size
+        new_rows, new_cols = new_grid_size
+
+        if old_rows == new_rows and old_cols == new_cols:
+            return ocr_values
+
+        # Simple proportional mapping
+        new_values = []
+        for row, col, value in ocr_values:
+            new_row = int(row * new_rows / old_rows)
+            new_col = int(col * new_cols / old_cols)
+            # Clamp to valid range
+            new_row = min(new_row, new_rows - 1)
+            new_col = min(new_col, new_cols - 1)
+            new_values.append((new_row, new_col, value))
+
+        return new_values
+
     def load_image(self):
         """Load and process image with OCR"""
         filename = filedialog.askopenfilename(
@@ -112,8 +159,18 @@ class TangoGUI:
             ocr = TangoOCRV2(debug=False)
             result = ocr.read_puzzle(filename)
 
-            self.grid_size = result['grid_size']
-            self.initial_values = result['initial_values']
+            # Use override if set, otherwise use OCR detection
+            if self.grid_size_override.get() > 0:
+                size = self.grid_size_override.get()
+                self.grid_size = (size, size)
+                # Need to re-segment with new size
+                self.initial_values = self._redetect_symbols_with_size(
+                    result['grid_size'], result['initial_values'], (size, size)
+                )
+            else:
+                self.grid_size = result['grid_size']
+                self.initial_values = result['initial_values']
+
             # Don't use OCR constraints - user will add them
             self.constraints = []
 
@@ -128,8 +185,14 @@ class TangoGUI:
             # Display
             self.draw_initial_grid()
 
+            # Status message
+            if self.grid_size_override.get() > 0:
+                size_msg = f"Grille {rows}×{cols} (manuel)"
+            else:
+                size_msg = f"Grille {rows}×{cols} (auto-détectée)"
+
             self.status_bar.config(
-                text=f"✓ Grille {rows}×{cols} détectée avec {len(self.initial_values)} symboles. "
+                text=f"✓ {size_msg} avec {len(self.initial_values)} symboles. "
                      f"Ajoutez les contraintes et cliquez sur Résoudre."
             )
 
