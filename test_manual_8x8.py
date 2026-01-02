@@ -71,6 +71,14 @@ print(f"  - × (opposé): {sum(1 for c in constraints if c.type == '×')}")
 # Résoudre
 print("\nRésolution avec V5...")
 solver = TangoSolverV5(grid)
+
+# Debug: voir les contraintes implicites générées
+print(f"Contraintes implicites générées: {len(solver.implicit_constraints)}")
+for ic in solver.implicit_constraints[:5]:  # Afficher les 5 premières
+    print(f"  {ic.type} entre {ic.cell1} et {ic.cell2}")
+if len(solver.implicit_constraints) > 5:
+    print(f"  ... et {len(solver.implicit_constraints) - 5} autres")
+
 solved, iterations, elapsed = solver.solve(max_iterations=100)
 
 print("\nSolution:")
