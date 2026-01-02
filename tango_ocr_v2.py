@@ -146,25 +146,105 @@ class TangoOCRV2:
 
     def _determine_grid_size(self, grid_rect: Tuple[int, int, int, int]) -> Tuple[int, int]:
         """
-        Determine grid size by detecting cell boundaries
+        Determine grid size by detecting grid lines
 
-        For now, we'll try common sizes and pick the one that fits best
+        Strategy: Count horizontal and vertical lines in the grid
         """
         x, y, w, h = grid_rect
 
-        # Try common grid sizes
+        # Extract grid region
+        grid_roi = self.gray[y:y+h, x:x+w]
+
+        # Detect lines using edge detection
+        edges = cv2.Canny(grid_roi, 50, 150)
+
+        # Detect horizontal lines
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (w//4, 1))
+        horizontal_lines = cv2.morphologyEx(edges, cv2.MORPH_OPEN, horizontal_kernel)
+
+        # Detect vertical lines
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, h//4))
+        vertical_lines = cv2.morphologyEx(edges, cv2.MORPH_OPEN, vertical_kernel)
+
+        # Count horizontal lines (by projecting onto Y axis)
+        h_projection = np.sum(horizontal_lines, axis=1)
+        h_peaks = self._count_peaks(h_projection, min_distance=h//15)
+
+        # Count vertical lines (by projecting onto X axis)
+        v_projection = np.sum(vertical_lines, axis=0)
+        v_peaks = self._count_peaks(v_projection, min_distance=w//15)
+
+        if self.debug:
+            print(f"  Detected {h_peaks} horizontal lines, {v_peaks} vertical lines")
+            cv2.imwrite('/tmp/debug_horizontal_lines.png', horizontal_lines)
+            cv2.imwrite('/tmp/debug_vertical_lines.png', vertical_lines)
+
+        # Number of cells = number of lines - 1
+        # But lines include borders, so we might have N+1 lines for N cells
+        rows = h_peaks - 1 if h_peaks > 1 else 6
+        cols = v_peaks - 1 if v_peaks > 1 else 6
+
+        # Clamp to reasonable range
+        rows = max(4, min(12, rows))
+        cols = max(4, min(12, cols))
+
+        # If detection failed or unreasonable, fall back to heuristic
+        if abs(rows - cols) > 2:  # Expect roughly square grid
+            if self.debug:
+                print(f"  Line detection gave {rows}×{cols}, trying heuristic...")
+            return self._determine_grid_size_heuristic(grid_rect)
+
+        return (rows, cols)
+
+    def _count_peaks(self, projection: np.ndarray, min_distance: int) -> int:
+        """Count peaks in a 1D projection"""
+        if len(projection) == 0:
+            return 0
+
+        # Find local maxima
+        peaks = []
+        threshold = np.max(projection) * 0.3  # At least 30% of max
+
+        for i in range(1, len(projection) - 1):
+            if projection[i] > threshold:
+                # Check if it's a local maximum
+                if projection[i] > projection[i-1] and projection[i] > projection[i+1]:
+                    # Check minimum distance from previous peak
+                    if not peaks or i - peaks[-1] >= min_distance:
+                        peaks.append(i)
+
+        return len(peaks)
+
+    def _determine_grid_size_heuristic(self, grid_rect: Tuple[int, int, int, int]) -> Tuple[int, int]:
+        """
+        Fallback: determine grid size by cell size heuristic
+        """
+        x, y, w, h = grid_rect
+
+        # Try common grid sizes and pick the best fit
+        best_size = (6, 6)
+        best_score = float('inf')
+
         for size in [6, 8, 10, 12]:
-            # Check if dimensions are divisible
             cell_width = w / size
             cell_height = h / size
 
-            # If cells are roughly square and reasonable size
+            # Score based on:
+            # 1. How square the cells are
+            # 2. How reasonable the cell size is (prefer 40-100 pixels)
             aspect = cell_width / cell_height if cell_height > 0 else 0
-            if 0.9 < aspect < 1.1 and 40 < cell_width < 200:
-                return (size, size)
+            aspect_score = abs(1.0 - aspect)
 
-        # Default to 6×6
-        return (6, 6)
+            ideal_size = 60
+            size_score = abs(cell_width - ideal_size) / ideal_size
+
+            total_score = aspect_score + size_score
+
+            if total_score < best_score:
+                best_score = total_score
+                best_size = (size, size)
+
+        return best_size
 
     def _segment_cells(self, grid_rect: Tuple[int, int, int, int],
                       grid_size: Tuple[int, int]) -> List[Cell]:
