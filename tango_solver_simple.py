@@ -176,19 +176,21 @@ class TangoSolverSimple:
 
         # Check balance constraints
         if valid:
-            # Check row balance
+            # Check row balance (max half of columns should be 0 or 1)
+            max_count = self.grid.cols // 2
             row_vals = [self.grid.get_cell(row, c) for c in range(self.grid.cols)]
             count_0 = sum(1 for x in row_vals if x == 0)
             count_1 = sum(1 for x in row_vals if x == 1)
-            if count_0 > 5 or count_1 > 5:
+            if count_0 > max_count or count_1 > max_count:
                 valid = False
 
         if valid:
-            # Check column balance
+            # Check column balance (max half of rows should be 0 or 1)
+            max_count = self.grid.rows // 2
             col_vals = [self.grid.get_cell(r, col) for r in range(self.grid.rows)]
             count_0 = sum(1 for x in col_vals if x == 0)
             count_1 = sum(1 for x in col_vals if x == 1)
-            if count_0 > 5 or count_1 > 5:
+            if count_0 > max_count or count_1 > max_count:
                 valid = False
 
         # Restore
