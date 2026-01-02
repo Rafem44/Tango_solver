@@ -77,6 +77,17 @@ class TangoGUI:
         ttk.Radiobutton(top_frame, text="× (différent)", variable=self.constraint_type,
                        value="×").pack(side=tk.LEFT, padx=5)
 
+        # Separator
+        ttk.Separator(top_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Cell edit mode
+        ttk.Label(top_frame, text="Mode:").pack(side=tk.LEFT, padx=5)
+        self.edit_mode = tk.StringVar(value="constraint")
+        ttk.Radiobutton(top_frame, text="Contraintes", variable=self.edit_mode,
+                       value="constraint").pack(side=tk.LEFT)
+        ttk.Radiobutton(top_frame, text="Cellules (0/1)", variable=self.edit_mode,
+                       value="cell").pack(side=tk.LEFT, padx=5)
+
         # Solve button
         ttk.Button(top_frame, text="🚀 Résoudre",
                   command=self.solve_puzzle).pack(side=tk.RIGHT, padx=5)
@@ -265,7 +276,7 @@ class TangoGUI:
                              fill="red")
 
     def on_canvas_click(self, event):
-        """Handle canvas click to add constraints"""
+        """Handle canvas click to add constraints or edit cells"""
         if not self.grid:
             return
 
@@ -276,26 +287,72 @@ class TangoGUI:
         if x < 0 or y < 0:
             return
 
-        # Determine if click is on a border (between cells)
         col_float = x / self.cell_size
         row_float = y / self.cell_size
 
         col = int(col_float)
         row = int(row_float)
 
-        # Check if click is near a vertical border (between columns)
+        # Check bounds
+        if row >= self.grid_size[0] or col >= self.grid_size[1]:
+            return
+
+        if self.edit_mode.get() == "cell":
+            # Cell edit mode: click on cell to cycle value (None -> 0 -> 1 -> None)
+            col_remainder = col_float - col
+            row_remainder = row_float - row
+
+            # Click must be in center of cell (not on border)
+            if 0.2 < col_remainder < 0.8 and 0.2 < row_remainder < 0.8:
+                self.toggle_cell_value(row, col)
+            return
+
+        # Constraint mode: click on border between cells
         col_remainder = col_float - col
+        row_remainder = row_float - row
+
+        # Check if click is near a vertical border (between columns)
         if 0.8 < col_remainder < 1.0 and col < self.grid_size[1] - 1:
             # Vertical border between col and col+1
             self.add_constraint(row, col, row, col + 1)
             return
 
         # Check if click is near a horizontal border (between rows)
-        row_remainder = row_float - row
         if 0.8 < row_remainder < 1.0 and row < self.grid_size[0] - 1:
             # Horizontal border between row and row+1
             self.add_constraint(row, col, row + 1, col)
             return
+
+    def toggle_cell_value(self, row, col):
+        """Toggle cell value: None -> 0 -> 1 -> None"""
+        current_value = self.grid.get_cell(row, col)
+
+        # Cycle: None -> 0 -> 1 -> None
+        if current_value is None:
+            new_value = 0
+        elif current_value == 0:
+            new_value = 1
+        else:  # current_value == 1
+            new_value = None
+
+        # Update grid
+        self.grid.set_cell(row, col, new_value)
+
+        # Update initial_values list
+        # Remove old entry if exists
+        self.initial_values = [(r, c, v) for r, c, v in self.initial_values
+                              if not (r == row and c == col)]
+
+        # Add new entry if not None
+        if new_value is not None:
+            self.initial_values.append((row, col, new_value))
+
+        # Redraw
+        self.draw_initial_grid()
+
+        # Update status
+        symbol = "vide" if new_value is None else str(new_value)
+        self.status_bar.config(text=f"Cellule ({row},{col}) = {symbol}")
 
     def add_constraint(self, r1, c1, r2, c2):
         """Add a constraint between two cells"""
