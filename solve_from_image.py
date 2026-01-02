@@ -14,7 +14,7 @@ import os
 
 try:
     from tango_ocr import TangoOCR
-    from tango_solver_simple import TangoGridSimple, TangoSolverSimple
+    from tango_solver_v5 import TangoGridV5, TangoSolverV5
 except ImportError as e:
     print(f"Error importing modules: {e}")
     print("\nMake sure to install dependencies:")
@@ -60,7 +60,7 @@ def solve_puzzle_from_image(image_path: str, debug: bool = False):
     # Step 2: Create grid
     print("Step 2: Creating grid...")
     rows, cols = grid_size
-    grid = TangoGridSimple(rows, cols)
+    grid = TangoGridV5(rows, cols)
 
     # Set initial values
     for row, col, value in initial_values:
@@ -88,7 +88,7 @@ def solve_puzzle_from_image(image_path: str, debug: bool = False):
     print("=" * 70)
     print()
 
-    solver = TangoSolverSimple(grid)
+    solver = TangoSolverV5(grid)
     solved, iterations, time_ms = solver.solve(max_iterations=100)
 
     # Display solution
