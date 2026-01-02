@@ -84,6 +84,24 @@ solved, iterations, elapsed = solver.solve(max_iterations=100)
 print("\nSolution:")
 display_grid(grid)
 
+# Montrer les cellules vides (bloquées)
+print("\nCellules vides (positions bloquées):")
+empty_cells = []
+for r in range(8):
+    for c in range(8):
+        if grid.get_cell(r, c) is None:
+            empty_cells.append((r, c))
+
+if empty_cells:
+    print(f"  {len(empty_cells)} cellules vides:")
+    for i, (r, c) in enumerate(empty_cells):
+        print(f"    ({r},{c})", end="")
+        if (i + 1) % 8 == 0:
+            print()  # Nouvelle ligne tous les 8
+    print()
+else:
+    print("  Aucune - puzzle complété!")
+
 # Statistiques
 total_cells = 8 * 8
 filled_cells = sum(1 for r in range(8) for c in range(8) if grid.get_cell(r, c) is not None)
