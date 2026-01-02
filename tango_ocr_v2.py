@@ -268,20 +268,33 @@ class TangoOCRV2:
         """
         Detect = and × constraints between cells
 
-        Strategy: Look for dark text between cells
+        Improved strategy:
+        1. Look for dark regions between cells
+        2. Use multiple thresholds and techniques
+        3. Better classification with shape analysis
         """
         constraints = []
 
-        # Convert to grayscale for text detection
+        # Create better text mask with adaptive thresholding
         gray = self.gray.copy()
 
-        # Threshold for dark text
-        _, text_mask = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
+        # Try multiple threshold methods
+        _, binary1 = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        binary2 = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                        cv2.THRESH_BINARY_INV, 11, 2)
+
+        # Combine both
+        text_mask = cv2.bitwise_or(binary1, binary2)
+
+        # Morphological operations to clean up
+        kernel = np.ones((2, 2), np.uint8)
+        text_mask = cv2.morphologyEx(text_mask, cv2.MORPH_CLOSE, kernel)
 
         if self.debug:
-            cv2.imwrite('/tmp/debug_text_mask.png', text_mask)
+            cv2.imwrite('/tmp/debug_text_mask_improved.png', text_mask)
+            debug_constraints = self.img.copy()
 
-        # Create a grid to track cells
+        # Create cell grid
         rows, cols = self.grid_size
         cell_grid = {}
         for cell in cells:
@@ -294,26 +307,20 @@ class TangoOCRV2:
                 cell2 = cell_grid.get((r, c+1))
 
                 if cell1 and cell2:
-                    # Region between cells
-                    between_x = cell1.x + cell1.width
-                    between_y = cell1.y + cell1.height // 4
-                    between_w = cell2.x - (cell1.x + cell1.width)
-                    between_h = cell1.height // 2
+                    constraint_type = self._detect_constraint_between_cells(
+                        cell1, cell2, text_mask, 'horizontal'
+                    )
 
-                    if between_w > 0 and between_h > 0:
-                        roi = text_mask[between_y:between_y+between_h,
-                                       between_x:between_x+between_w]
+                    if constraint_type:
+                        constraints.append(((r, c), (r, c+1), constraint_type))
 
-                        # Count dark pixels
-                        dark_pixels = cv2.countNonZero(roi)
-
-                        # If enough dark pixels, there's probably a symbol
-                        if dark_pixels > 20:
-                            # Try to distinguish = from ×
-                            # Simple heuristic: × has more diagonal structure
-                            constraint_type = self._classify_constraint(roi)
-                            if constraint_type:
-                                constraints.append(((r, c), (r, c+1), constraint_type))
+                        if self.debug:
+                            # Draw constraint on debug image
+                            cx = (cell1.x + cell1.width + cell2.x) // 2
+                            cy = (cell1.y + cell2.y + cell2.height) // 2
+                            cv2.putText(debug_constraints, constraint_type,
+                                      (cx-10, cy+5), cv2.FONT_HERSHEY_SIMPLEX,
+                                      0.5, (0, 0, 255), 2)
 
         # Check vertical constraints (between rows)
         for r in range(rows - 1):
@@ -322,55 +329,161 @@ class TangoOCRV2:
                 cell2 = cell_grid.get((r+1, c))
 
                 if cell1 and cell2:
-                    # Region between cells
-                    between_x = cell1.x + cell1.width // 4
-                    between_y = cell1.y + cell1.height
-                    between_w = cell1.width // 2
-                    between_h = cell2.y - (cell1.y + cell1.height)
+                    constraint_type = self._detect_constraint_between_cells(
+                        cell1, cell2, text_mask, 'vertical'
+                    )
 
-                    if between_w > 0 and between_h > 0:
-                        roi = text_mask[between_y:between_y+between_h,
-                                       between_x:between_x+between_w]
+                    if constraint_type:
+                        constraints.append(((r, c), (r+1, c), constraint_type))
 
-                        dark_pixels = cv2.countNonZero(roi)
+                        if self.debug:
+                            cx = (cell1.x + cell2.x + cell2.width) // 2
+                            cy = (cell1.y + cell1.height + cell2.y) // 2
+                            cv2.putText(debug_constraints, constraint_type,
+                                      (cx-10, cy+5), cv2.FONT_HERSHEY_SIMPLEX,
+                                      0.5, (0, 0, 255), 2)
 
-                        if dark_pixels > 20:
-                            constraint_type = self._classify_constraint(roi)
-                            if constraint_type:
-                                constraints.append(((r, c), (r+1, c), constraint_type))
+        if self.debug:
+            cv2.imwrite('/tmp/debug_constraints_detected.png', debug_constraints)
 
         return constraints
 
+    def _detect_constraint_between_cells(self, cell1: Cell, cell2: Cell,
+                                        text_mask: np.ndarray,
+                                        direction: str) -> Optional[str]:
+        """
+        Detect constraint between two adjacent cells
+
+        Args:
+            cell1, cell2: Adjacent cells
+            text_mask: Binary mask of text regions
+            direction: 'horizontal' or 'vertical'
+
+        Returns:
+            "=" or "×" or None
+        """
+        if direction == 'horizontal':
+            # Region between horizontally adjacent cells
+            between_x = cell1.x + cell1.width
+            between_w = cell2.x - (cell1.x + cell1.width)
+            between_y = cell1.y + cell1.height // 3
+            between_h = cell1.height // 3
+        else:  # vertical
+            # Region between vertically adjacent cells
+            between_x = cell1.x + cell1.width // 3
+            between_w = cell1.width // 3
+            between_y = cell1.y + cell1.height
+            between_h = cell2.y - (cell1.y + cell1.height)
+
+        # Check bounds
+        if between_w <= 0 or between_h <= 0:
+            return None
+
+        # Extract ROI
+        roi = text_mask[between_y:between_y+between_h,
+                       between_x:between_x+between_w]
+
+        if roi.size == 0:
+            return None
+
+        # Count dark pixels
+        dark_pixels = cv2.countNonZero(roi)
+        total_pixels = roi.size
+        dark_ratio = dark_pixels / total_pixels if total_pixels > 0 else 0
+
+        # Need significant dark content
+        if dark_ratio < 0.1:
+            return None
+
+        # Classify the symbol
+        return self._classify_constraint_improved(roi, direction)
+
     def _classify_constraint(self, roi: np.ndarray) -> Optional[str]:
         """
-        Classify constraint as = or ×
-
-        Simple heuristic:
-        - = has horizontal structure
-        - × has diagonal structure
+        Old classification method (kept for compatibility)
         """
-        if roi.size == 0:
+        return self._classify_constraint_improved(roi, 'horizontal')
+
+    def _classify_constraint_improved(self, roi: np.ndarray, direction: str) -> Optional[str]:
+        """
+        Improved constraint classification
+
+        Strategy:
+        - = symbol: two horizontal lines (high horizontal density)
+        - × symbol: diagonal crossing (high corner/diagonal activity)
+        """
+        if roi.size == 0 or roi.shape[0] < 3 or roi.shape[1] < 3:
             return None
 
         h, w = roi.shape
 
-        # Analyze structure
-        # For =: expect two horizontal lines
-        # For ×: expect diagonal pattern
+        # Analyze different regions
+        # Divide ROI into 3x3 grid
+        third_h = h // 3
+        third_w = w // 3
 
-        # Simple approach: look at center row vs corners
-        if h > 2 and w > 2:
-            center = roi[h//2, :]
-            corners = roi[0, 0] + roi[0, -1] + roi[-1, 0] + roi[-1, -1]
+        if third_h == 0 or third_w == 0:
+            return None
 
-            center_sum = np.sum(center > 0)
+        # Extract 9 regions
+        regions = []
+        for i in range(3):
+            for j in range(3):
+                y1, y2 = i * third_h, (i + 1) * third_h if i < 2 else h
+                x1, x2 = j * third_w, (j + 1) * third_w if j < 2 else w
+                region = roi[y1:y2, x1:x2]
+                density = np.sum(region > 0) / region.size if region.size > 0 else 0
+                regions.append(density)
 
-            # If center row has many pixels, likely =
-            if center_sum > w * 0.5:
-                return "="
-            # If corners are active, likely ×
-            elif corners > 200:
-                return "×"
+        # regions layout:
+        # 0 1 2
+        # 3 4 5
+        # 6 7 8
+
+        # For = : expect high density in middle row (3, 4, 5) and possibly top/bottom
+        middle_row_density = (regions[3] + regions[4] + regions[5]) / 3
+
+        # For × : expect high density in corners (0, 2, 6, 8) and center (4)
+        corner_density = (regions[0] + regions[2] + regions[6] + regions[8]) / 4
+        center_density = regions[4]
+
+        # Additional analysis: count horizontal vs diagonal lines
+        # Horizontal lines (for =)
+        horizontal_score = 0
+        for i in range(h):
+            row_sum = np.sum(roi[i, :] > 0)
+            if row_sum > w * 0.5:  # More than half the row is dark
+                horizontal_score += 1
+
+        # Diagonal analysis (for ×)
+        # Check main diagonal
+        diag1_score = sum(roi[min(i, h-1), min(i, w-1)] > 0 for i in range(min(h, w)))
+        # Check anti-diagonal
+        diag2_score = sum(roi[min(i, h-1), max(0, w-1-i)] > 0 for i in range(min(h, w)))
+        diagonal_score = diag1_score + diag2_score
+
+        # Decision logic
+        # = tends to have:
+        #   - High horizontal_score (at least 2 horizontal lines)
+        #   - High middle_row_density
+        # × tends to have:
+        #   - High diagonal_score
+        #   - High corner_density
+        #   - High center_density
+
+        equals_score = horizontal_score * 2 + middle_row_density * 10
+        cross_score = diagonal_score + corner_density * 10 + center_density * 5
+
+        if self.debug:
+            print(f"  ROI {roi.shape}: = score={equals_score:.2f}, × score={cross_score:.2f}")
+            print(f"    horizontal_score={horizontal_score}, diagonal_score={diagonal_score}")
+            print(f"    middle_row={middle_row_density:.2f}, corners={corner_density:.2f}")
+
+        # Require a clear winner
+        if equals_score > cross_score and equals_score > 3:
+            return "="
+        elif cross_score > equals_score and cross_score > 3:
+            return "×"
 
         return None
 
